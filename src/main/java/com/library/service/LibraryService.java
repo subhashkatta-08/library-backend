@@ -346,29 +346,36 @@ public class LibraryService {
 	}
 	
 	public String approveReturnRequest(Integer id) {
-		IssueRecordEntity issueRecordEntity = issueRecordRepo.findById(id)
-											.orElseThrow(() -> new IssueRecordNotFoundException("Issuse Record Not Found"));
-		LocalDate today = LocalDate.now();
-		
-		if(issueRecordEntity.getStatus().equals("RETURN_REQUESTED")) {
-			issueRecordEntity.setStatus("RETURNED");
-			issueRecordEntity.setReturnDate(today);
-			
-			LocalDate dueDate = issueRecordEntity.getDueDate();
-			
-			if (dueDate != null && today.isAfter(dueDate)) {
-	            long daysLate = ChronoUnit.DAYS.between(dueDate, today);
-	            double finePerDay = 5.0; 
-	            double fine = daysLate * finePerDay;
 
-	            issueRecordEntity.getUser().setFine(fine);
-	        } else {
-	            issueRecordEntity.getUser().setFine(0.0);
-	        }
-		}
-		issueRecordRepo.save(issueRecordEntity).getId();
-		return "Book Returned Sucessfuly ";
-	}
+    IssueRecordEntity issueRecordEntity = issueRecordRepo.findById(id)
+            .orElseThrow(() -> new IssueRecordNotFoundException("Issue Record Not Found"));
+
+    if (!"RETURN_REQUESTED".equals(issueRecordEntity.getStatus())) {
+        throw new IllegalStateException("Book is not in RETURN_REQUESTED state");
+    }
+
+    LocalDate today = LocalDate.now();
+    issueRecordEntity.setStatus("RETURNED");
+    issueRecordEntity.setReturnDate(today);
+
+    BookEntity book = issueRecordEntity.getBook();
+    book.setAvailableCopies(book.getAvailableCopies() + 1);
+
+    LocalDate dueDate = issueRecordEntity.getDueDate();
+
+    if (dueDate != null && today.isAfter(dueDate)) {
+
+        long daysLate = ChronoUnit.DAYS.between(dueDate, today);
+        double finePerDay = 5.0;
+        double fine = daysLate * finePerDay;
+
+        UserEntity user = issueRecordEntity.getUser();
+        user.setFine(user.getFine() + fine); // accumulate fine
+    }
+
+    issueRecordRepo.save(issueRecordEntity);
+    return "Book Returned Successfully";
+}
 	
 	public List<UserDto> getAllUsers(){
 		List<UserEntity> allUsers = userRepo.findAll();
